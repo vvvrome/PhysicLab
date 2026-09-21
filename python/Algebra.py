@@ -1,13 +1,12 @@
 import argparse
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 import numpy as np
-from flask import Flask, render_template_string, request
+from scipy.integrate import quad
 
 
 TOLERANCIA = 1e-10
 NOMBRES_VARIABLES = ["x", "y", "z", "w", "v", "u", "p", "q"]
-app = Flask(__name__)
 
 
 def formatear_matriz(matriz: np.ndarray) -> str:
@@ -51,6 +50,201 @@ def gauss_jordan(matriz_ampliada: np.ndarray) -> Tuple[np.ndarray, List[str]]:
     matriz[np.abs(matriz) < TOLERANCIA] = 0.0
     pasos.append("Matriz reducida por Gauss-Jordan:\n" + formatear_matriz(matriz))
     return matriz, pasos
+
+
+def calcular_determinante(matriz: np.ndarray) -> Tuple[float, List[str]]:
+    """Calcula el determinante por eliminacion de Gauss-Jordan con control de cambios de fila."""
+    if matriz.ndim != 2 or matriz.shape[0] != matriz.shape[1]:
+        raise ValueError("La matriz debe ser cuadrada para calcular su determinante.")
+
+    n = matriz.shape[0]
+    matriz_reducida = matriz.astype(float).copy()
+    pasos = ["Determinante: matriz inicial\n" + formatear_matriz(matriz_reducida)]
+    signo = 1.0
+    determinante = 1.0
+
+    for columna in range(n):
+        fila_pivote = columna + int(np.argmax(np.abs(matriz_reducida[columna:, columna])))
+        if abs(matriz_reducida[fila_pivote, columna]) < TOLERANCIA:
+            return 0.0, pasos + ["El determinante es cero porque aparece un pivote nulo."]
+
+        if fila_pivote != columna:
+            matriz_reducida[[columna, fila_pivote]] = matriz_reducida[[fila_pivote, columna]]
+            signo *= -1
+            pasos.append(f"Intercambio F{columna + 1} <-> F{fila_pivote + 1}:\n" + formatear_matriz(matriz_reducida))
+
+        pivote = matriz_reducida[columna, columna]
+        determinante *= pivote
+        pasos.append(f"Pivote en la columna {columna + 1}: {pivote:.6g}. Determinante parcial = {determinante:.6g}")
+
+        if not np.isclose(pivote, 1.0):
+            matriz_reducida[columna] /= pivote
+            pasos.append(f"F{columna + 1} <- F{columna + 1} / {pivote:.6g}:\n" + formatear_matriz(matriz_reducida))
+
+        for fila in range(columna + 1, n):
+            factor = matriz_reducida[fila, columna]
+            if abs(factor) >= TOLERANCIA:
+                matriz_reducida[fila] -= factor * matriz_reducida[columna]
+                pasos.append(f"F{fila + 1} <- F{fila + 1} - ({factor:.6g}) F{columna + 1}:\n" + formatear_matriz(matriz_reducida))
+
+    determinante_final = signo * determinante
+    pasos.append(f"Determinante final: det(A) = {determinante_final:.6g}")
+    return determinante_final, pasos
+
+
+def inversa_matriz(matriz: np.ndarray) -> Tuple[np.ndarray, List[str]]:
+    """Calcula la matriz inversa usando la ampliada [A|I] y Gauss-Jordan."""
+    if matriz.ndim != 2 or matriz.shape[0] != matriz.shape[1]:
+        raise ValueError("La matriz debe ser cuadrada para calcular su inversa.")
+
+    n = matriz.shape[0]
+    matriz_original = matriz.astype(float).copy()
+    identidad = np.eye(n)
+    ampliada = np.hstack((matriz_original, identidad))
+    pasos = ["Matriz aumentada inicial [A|I]:\n" + formatear_matriz(ampliada)]
+
+    if abs(np.linalg.det(matriz_original)) < TOLERANCIA:
+        return np.zeros_like(matriz_original), pasos + ["La matriz no es invertible porque su determinante es cero."]
+
+    fila_pivote = 0
+    for columna in range(n):
+        if fila_pivote >= n:
+            break
+
+        posicion = fila_pivote + int(np.argmax(np.abs(ampliada[fila_pivote:, columna])))
+        if abs(ampliada[posicion, columna]) < TOLERANCIA:
+            continue
+
+        if posicion != fila_pivote:
+            ampliada[[fila_pivote, posicion]] = ampliada[[posicion, fila_pivote]]
+            pasos.append(f"Intercambio F{fila_pivote + 1} <-> F{posicion + 1}:\n" + formatear_matriz(ampliada))
+
+        pivote = ampliada[fila_pivote, columna]
+        ampliada[fila_pivote] /= pivote
+        pasos.append(f"F{fila_pivote + 1} <- F{fila_pivote + 1} / {pivote:.6g}:\n" + formatear_matriz(ampliada))
+
+        for fila in range(n):
+            if fila == fila_pivote:
+                continue
+            factor = ampliada[fila, columna]
+            if abs(factor) >= TOLERANCIA:
+                ampliada[fila] -= factor * ampliada[fila_pivote]
+                pasos.append(f"F{fila + 1} <- F{fila + 1} - ({factor:.6g}) F{fila_pivote + 1}:\n" + formatear_matriz(ampliada))
+
+        fila_pivote += 1
+
+    inversa = ampliada[:, n:]
+    inversa[np.abs(inversa) < TOLERANCIA] = 0.0
+    pasos.append("Matriz inversa final:\n" + formatear_matriz(inversa))
+    return inversa, pasos
+
+
+def autovalores_autovectores(matriz: np.ndarray):
+    """Calcula autovalores y autovectores usando NumPy y verifica Av = λv."""
+    if matriz.ndim != 2 or matriz.shape[0] != matriz.shape[1]:
+        raise ValueError("La matriz debe ser cuadrada para calcular autovalores y autovectores.")
+
+    autovalores, autovectores = np.linalg.eig(matriz)
+    verificaciones = []
+    for indice, valor in enumerate(autovalores):
+        vector = autovectores[:, indice]
+        residuo = matriz @ vector - valor * vector
+        verificaciones.append({
+            "indice": indice,
+            "autovalor": complex(valor),
+            "autovector": np.asarray(vector, dtype=complex),
+            "residuo": np.asarray(residuo, dtype=complex),
+            "cumple": bool(np.allclose(residuo, 0.0 + 0.0j, atol=1e-8))
+        })
+    return autovalores, autovectores, verificaciones
+
+
+def producto_escalar(u: np.ndarray, v: np.ndarray) -> float:
+    u = np.asarray(u, dtype=float)
+    v = np.asarray(v, dtype=float)
+    if u.shape != v.shape:
+        raise ValueError("Los vectores deben tener la misma dimension.")
+    return float(np.dot(u, v))
+
+
+def norma_vector(v: np.ndarray) -> float:
+    v = np.asarray(v, dtype=float)
+    return float(np.linalg.norm(v))
+
+
+def producto_vectorial(u: np.ndarray, v: np.ndarray) -> np.ndarray:
+    u = np.asarray(u, dtype=float)
+    v = np.asarray(v, dtype=float)
+    if u.shape != (3,) or v.shape != (3,):
+        raise ValueError("El producto vectorial solo esta definido para vectores 3D.")
+    return np.cross(u, v)
+
+
+def transformar_vector(vector: np.ndarray, matriz: np.ndarray) -> np.ndarray:
+    vector = np.asarray(vector, dtype=float)
+    matriz = np.asarray(matriz, dtype=float)
+    if vector.size != matriz.shape[0]:
+        raise ValueError("La dimension del vector debe coincidir con las filas de la matriz.")
+    return matriz @ vector
+
+
+def matriz_rotacion_2d(angulo_rad: float) -> np.ndarray:
+    c = np.cos(angulo_rad)
+    s = np.sin(angulo_rad)
+    return np.array([[c, -s], [s, c]], dtype=float)
+
+
+def matriz_escala_2d(fx: float, fy: float) -> np.ndarray:
+    return np.array([[fx, 0.0], [0.0, fy]], dtype=float)
+
+
+def derivada_numerica(funcion: Callable[[float], float], x: float, h: float = 1e-5) -> float:
+    return (funcion(x + h) - funcion(x - h)) / (2 * h)
+
+
+def integrar_numerica(funcion: Callable[[float], float], a: float, b: float, pasos: int = 1000) -> float:
+    xs = np.linspace(a, b, pasos)
+    ys = np.array([funcion(x) for x in xs], dtype=float)
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(ys, xs))
+    return float(np.trapz(ys, xs))
+
+
+def representar_funcion(funcion: Callable[[float], float], a: float, b: float, puntos: int = 400):
+    xs = np.linspace(a, b, puntos)
+    ys = np.array([funcion(x) for x in xs], dtype=float)
+    return xs, ys
+
+
+def simulacion_proyectil(v0: float = 20.0, angulo_deg: float = 45.0, g: float = 9.81, tiempo_max: float = 5.0):
+    angulo = np.radians(angulo_deg)
+    t = np.linspace(0, tiempo_max, 400)
+    x = v0 * np.cos(angulo) * t
+    y = v0 * np.sin(angulo) * t - 0.5 * g * t ** 2
+    alcance = (v0 ** 2 * np.sin(2 * angulo)) / g
+    altura_maxima = (v0 ** 2 * np.sin(angulo) ** 2) / (2 * g)
+    return {
+        "tiempo": t,
+        "x": x,
+        "y": y,
+        "alcance": alcance,
+        "altura_maxima": altura_maxima,
+        "trayectoria": np.column_stack((x, y))
+    }
+
+
+def fuerza_lorentz(carga: float, velocidad: np.ndarray, campo_electrico: np.ndarray, campo_magnetico: np.ndarray):
+    velocidad = np.asarray(velocidad, dtype=float)
+    campo_electrico = np.asarray(campo_electrico, dtype=float)
+    campo_magnetico = np.asarray(campo_magnetico, dtype=float)
+    if velocidad.shape != (3,) or campo_electrico.shape != (3,) or campo_magnetico.shape != (3,):
+        raise ValueError("La velocidad y los campos deben ser vectores tridimensionales.")
+    return carga * (campo_electrico + np.cross(velocidad, campo_magnetico))
+
+
+def resolucion_integral_definida(funcion: Callable[[float], float], a: float, b: float):
+    valor, error = quad(funcion, a, b)
+    return {"valor": valor, "error": error}
 
 
 def resolver_por_igualacion(coeficientes: np.ndarray, independientes: np.ndarray) -> List[str]:
@@ -168,7 +362,7 @@ def convertir_formulario(formulario, filas: int, columnas: int):
 def leer_entero_validado(prompt: str, minimo: int = 1, maximo: int = 8) -> int:
     while True:
         try:
-            valor = float(input(prompt))
+            valor = int(input(prompt))
             if not minimo <= valor <= maximo:
                 raise ValueError(f"el valor debe estar entre {minimo} y {maximo}.")
             return valor
@@ -176,403 +370,7 @@ def leer_entero_validado(prompt: str, minimo: int = 1, maximo: int = 8) -> int:
             print(f"Entrada invalida: {exc}")
             print(f"Intentalo de nuevo.")
 
-PLANTILLA = """<!doctype html>
-<html lang="es">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <title>Algebra I | Sistemas lineales</title>
-
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: system-ui, sans-serif;
-            background: #101820;
-            color: #f4f1de;
-            margin: 0;
-            padding: 32px;
-        }
-
-        main {
-            max-width: 1100px;
-            margin: auto;
-        }
-
-        h1 {
-            color: #f2c14e;
-        }
-
-        h2 {
-            color: #3fa7d6;
-            margin-top: 24px;
-        }
-
-        section {
-            background: #182832;
-            border: 1px solid #31505c;
-            border-radius: 10px;
-            padding: 22px;
-            margin: 18px 0;
-        }
-
-        .config {
-            display: flex;
-            gap: 12px;
-            align-items: end;
-            flex-wrap: wrap;
-        }
-
-        .campo {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        input,
-        select {
-            padding: 9px;
-            border: 1px solid #55727d;
-            border-radius: 5px;
-            background: #0f1b21;
-            color: white;
-            font-size: 14px;
-        }
-
-        input[type="number"] {
-            width: 88px;
-        }
-
-        button {
-            padding: 10px 16px;
-            border: 0;
-            border-radius: 5px;
-            background: #f2c14e;
-            color: #101820;
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #ffd166;
-        }
-
-        table {
-            border-collapse: collapse;
-            margin-top: 14px;
-        }
-
-        td {
-            padding: 4px;
-        }
-
-        td input {
-            width: 72px;
-        }
-
-        pre {
-            overflow: auto;
-            background: #0b1318;
-            border-left: 3px solid #f2c14e;
-            padding: 14px;
-            line-height: 1.45;
-            white-space: pre-wrap;
-        }
-
-        .resultado {
-            border-left: 4px solid #3fa7d6;
-        }
-
-        .error {
-            color: #ff8b8b;
-        }
-
-        .acciones {
-            margin-top: 16px;
-        }
-
-        details {
-            margin-top: 20px;
-        }
-
-        summary {
-            cursor: pointer;
-            color: #3fa7d6;
-            font-weight: bold;
-        }
-
-        @media (max-width: 600px) {
-            body {
-                padding: 12px;
-            }
-
-            section {
-                padding: 14px;
-            }
-
-            input[type="number"] {
-                width: 65px;
-            }
-
-            td {
-                padding: 2px;
-            }
-        }
-    </style>
-</head>
-
-<body>
-<main>
-
-    <h1>Resolucion de sistemas lineales</h1>
-
-    <p>
-        Rouché-Frobenius, eliminacion de Gauss-Jordan
-        y solucion general.
-    </p>
-
-    <!-- CONFIGURACION DE LA MATRIZ -->
-
-    <section>
-
-        <h2>1. Define la matriz</h2>
-
-        <form method="post">
-
-            <div class="config">
-
-                <label class="campo">
-                    Ecuaciones
-
-                    <input
-                        type="number"
-                        name="filas"
-                        min="1"
-                        max="8"
-                        value="{{ filas }}"
-                        required
-                    >
-                </label>
-
-                <label class="campo">
-                    Incognitas
-
-                    <input
-                        type="number"
-                        name="columnas"
-                        min="1"
-                        max="8"
-                        value="{{ columnas }}"
-                        required
-                    >
-                </label>
-
-                <label class="campo">
-                    Metodo
-
-                    <select name="metodo">
-                        <option
-                            value="reduccion"
-                            {% if metodo == "reduccion" %}selected{% endif %}
-                        >
-                            Reduccion (Gauss-Jordan)
-                        </option>
-
-                        <option
-                            value="igualacion"
-                            {% if metodo == "igualacion" %}selected{% endif %}
-                        >
-                            Igualacion (2x2)
-                        </option>
-                    </select>
-                </label>
-
-                <button name="accion" value="generar">
-                    Generar matriz
-                </button>
-
-            </div>
-
-            <!-- MATRIZ DE COEFICIENTES -->
-
-            {% if mostrar_matriz %}
-
-                <h2>2. Introduce los coeficientes</h2>
-
-                <p>
-                    Introduce los coeficientes de cada incognita
-                    y el termino independiente.
-                </p>
-
-                <!-- Mantener dimensiones y metodo al resolver -->
-
-                <input
-                    type="hidden"
-                    name="filas"
-                    value="{{ filas }}"
-                >
-
-                <input
-                    type="hidden"
-                    name="columnas"
-                    value="{{ columnas }}"
-                >
-
-                <input
-                    type="hidden"
-                    name="metodo"
-                    value="{{ metodo }}"
-                >
-
-                <table>
-                    <tbody>
-
-                    {% for i in range(filas) %}
-
-                        <tr>
-
-                            {% for j in range(columnas) %}
-
-                                <td>
-                                    <input
-                                        required
-                                        type="number"
-                                        step="any"
-                                        name="a_{{ i }}_{{ j }}"
-                                        value="{{ valores_formulario.get('a_%d_%d' % (i, j), '') }}"
-                                        placeholder="{{ nombres[j] }}"
-                                        aria-label="Ecuacion {{ i+1 }}, coeficiente de {{ nombres[j] }}"
-                                    >
-                                </td>
-
-                            {% endfor %}
-
-                            <td>=</td>
-
-                            <!-- Termino independiente -->
-
-                            <td>
-                                <input
-                                    required
-                                    type="number"
-                                    step="any"
-                                    name="b_{{ i }}"
-                                    value="{{ valores_formulario.get('b_%d' % i, '') }}"
-                                    placeholder="b{{ i+1 }}"
-                                    aria-label="Termino independiente de la ecuacion {{ i+1 }}"
-                                >
-                            </td>
-
-                        </tr>
-
-                    {% endfor %}
-
-                    </tbody>
-                </table>
-
-                <div class="acciones">
-                    <button name="accion" value="resolver">
-                        Resolver sistema
-                    </button>
-                </div>
-
-            {% endif %}
-
-        </form>
-
-    </section>
-
-    <!-- MENSAJES DE ERROR -->
-
-    {% if error %}
-
-        <section class="error">
-            <strong>Error:</strong> {{ error }}
-        </section>
-
-    {% endif %}
-
-    <!-- RESULTADOS -->
-
-    {% if resultado %}
-
-        <section class="resultado">
-
-            <h2>Resultado</h2>
-
-            <p>
-                <strong>{{ resultado.tipo }}</strong>
-            </p>
-
-            <p>
-                Rango de A:
-                <strong>{{ resultado.rango_matriz }}</strong>
-
-                |
-
-                Rango de [A|b]:
-                <strong>{{ resultado.rango_ampliada }}</strong>
-            </p>
-
-            <h3>Solucion general</h3>
-
-            <p>{{ resultado.solucion_general }}</p>
-
-            <h3>Forma reducida</h3>
-
-            <pre>{{ formatear(resultado.reducida) }}</pre>
-
-            <!-- PASOS DEL PROCEDIMIENTO -->
-
-            <details>
-
-                <summary>
-                    Mostrar pasos del procedimiento
-                </summary>
-
-                {% for paso in resultado.pasos %}
-
-                    <pre>{{ paso }}</pre>
-
-                {% endfor %}
-
-            </details>
-
-        </section>
-
-    {% endif %}
-
-</main>
-</body>
-</html>"""
-
-
-@app.route("/", methods=["GET", "POST"])
-def inicio():
-    filas, columnas, metodo = 2, 2, "reduccion"
-    mostrar_matriz, resultado, error = False, None, None
-    valores_formulario = {}
-    if request.method == "POST":
-        valores_formulario = request.form.to_dict(flat=True)
-        try:
-            filas, columnas = int(request.form["filas"]), int(request.form["columnas"])
-            metodo = request.form.get("metodo", "reduccion")
-            if metodo not in {"reduccion", "igualacion"}:
-                raise ValueError("Metodo no valido.")
-            if not 1 <= filas <= 8 or not 1 <= columnas <= 8:
-                raise ValueError("Las dimensiones deben estar entre 1 y 8.")
-            mostrar_matriz = True
-            if request.form.get("accion") == "resolver":
-                resultado = analizar_sistema(*convertir_formulario(request.form, filas, columnas), metodo=metodo)
-        except (KeyError, ValueError) as exc:
-            error = str(exc)
-    return render_template_string(PLANTILLA, filas=filas, columnas=columnas, nombres=NOMBRES_VARIABLES,
-                                  mostrar_matriz=mostrar_matriz, resultado=resultado, error=error,
-                                  formatear=formatear_matriz, metodo=metodo, valores_formulario=valores_formulario)
+PLANTILLA = None
 
 
 def resolver_consola():
@@ -611,10 +409,8 @@ def resolver_consola():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Resuelve sistemas lineales por rangos.")
     parser.add_argument("--cli", action="store_true", help="Usar la version de consola.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=5000)
     args = parser.parse_args()
     if args.cli:
         resolver_consola()
     else:
-        app.run(host=args.host, port=args.port, debug=True)
+        print("Este modulo contiene utilidades de algebra; ejecuta 'app.py' para la interfaz web.")
