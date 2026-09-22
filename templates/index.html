@@ -225,11 +225,12 @@
         </header>
 
         <nav class="tabs" aria-label="Navegación de secciones">
-            <button class="tab-btn active" type="button" data-target="sistemas">Sistemas de ecuaciones</button>
-            <button class="tab-btn" type="button" data-target="resto">Resto del roadmap</button>
+            <button class="tab-btn {% if active_section=='sistemas' %}active{% endif %}" type="button" data-target="sistemas">Sistemas de ecuaciones</button>
+            <button class="tab-btn {% if active_section=='fisica' %}active{% endif %}" type="button" data-target="fisica">Física</button>
+            <button class="tab-btn {% if active_section=='resto' %}active{% endif %}" type="button" data-target="resto">Resto del roadmap</button>
         </nav>
 
-        <section id="sistemas" class="panel active">
+        <section id="sistemas" class="panel {% if active_section=='sistemas' %}active{% endif %}">
             <div class="section-box" style="padding:0; border:none; background:transparent; box-shadow:none;">
                 <form method="post">
                     <input type="hidden" name="section" value="sistema">
@@ -294,7 +295,155 @@
             </div>
         </section>
 
-        <section id="resto" class="panel">
+        <section id="fisica" class="panel {% if active_section=='fisica' %}active{% endif %}">
+            <div class="section-box" style="padding:0; border:none; background:transparent; box-shadow:none;">
+                <form method="post">
+                    <input type="hidden" name="section" value="fisica">
+
+                    <div class="row">
+                        <label>Herramienta
+                            <select name="tool" id="tool-select">
+                                <option value="proyectil" {% if form_values.get('tool','proyectil')=='proyectil' %}selected{% endif %}>Tiro parabólico</option>
+                                <option value="caida" {% if form_values.get('tool')=='caida' %}selected{% endif %}>Caída libre</option>
+                                <option value="mru" {% if form_values.get('tool')=='mru' %}selected{% endif %}>MRU</option>
+                                <option value="mrua" {% if form_values.get('tool')=='mrua' %}selected{% endif %}>MRUA</option>
+                                <option value="lorentz" {% if form_values.get('tool')=='lorentz' %}selected{% endif %}>Fuerza de Lorentz</option>
+                                <option value="colision" {% if form_values.get('tool')=='colision' %}selected{% endif %}>Colisión 1D</option>
+                                <option value="oscilador" {% if form_values.get('tool')=='oscilador' %}selected{% endif %}>Oscilador armónico</option>
+                                <option value="doble_pendulo" {% if form_values.get('tool')=='doble_pendulo' %}selected{% endif %}>Doble péndulo</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    {% if errors %}
+                        <div class="result error">{{ errors|join('\n') }}</div>
+                    {% endif %}
+
+                    <div class="tool-group" data-tool="proyectil">
+                        <div class="row">
+                            <label>v0 <input name="v0" type="number" step="any" min="0" required value="{{ form_values.get('v0', 20) }}" placeholder="m/s" title="Velocidad inicial" ></label>
+                            <label>angulo <input name="angulo" type="number" step="any" required value="{{ form_values.get('angulo', 45) }}" placeholder="grados" title="Angulo en grados"></label>
+                        </div>
+                        <div class="row">
+                            <label>g <input name="g" type="number" step="any" min="0" required value="{{ form_values.get('g', 9.81) }}" placeholder="m/s²"></label>
+                            <label>tmax <input name="tmax" type="number" step="any" min="0" required value="{{ form_values.get('tmax', 5) }}" placeholder="s"></label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="caida" style="display:none">
+                        <div class="row">
+                            <label>Altura inicial h0 <input name="h0" type="number" step="any" required min="0" value="{{ form_values.get('h0', 1) }}" placeholder="m"></label>
+                            <label>g <input name="g" type="number" step="any" min="0" required value="{{ form_values.get('g', 9.81) }}" placeholder="m/s²"></label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="mru" style="display:none">
+                        <div class="row">
+                            <label>x0 <input name="x0" type="number" step="any" required value="{{ form_values.get('x0', 0) }}"></label>
+                            <label>v0 <input name="v0" type="number" step="any" required value="{{ form_values.get('v0', 1) }}"></label>
+                            <label>t <input name="t" type="number" step="any" min="0" required value="{{ form_values.get('t', 1) }}"></label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="mrua" style="display:none">
+                        <div class="row">
+                            <label>x0 <input name="x0" type="number" step="any" required value="{{ form_values.get('x0', 0) }}"></label>
+                            <label>v0 <input name="v0" type="number" step="any" required value="{{ form_values.get('v0', 1) }}"></label>
+                            <label>a <input name="a" type="number" step="any" required value="{{ form_values.get('a', 0) }}"></label>
+                            <label>t <input name="t" type="number" step="any" min="0" required value="{{ form_values.get('t', 1) }}"></label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="lorentz" style="display:none">
+                        <div class="row">
+                            <label>q <input name="q" type="number" step="any" required value="{{ form_values.get('q', 1) }}"></label>
+                            <label>vx <input name="vx" type="number" step="any" required value="{{ form_values.get('vx', 0) }}"></label>
+                            <label>vy <input name="vy" type="number" step="any" required value="{{ form_values.get('vy', 0) }}"></label>
+                            <label>vz <input name="vz" type="number" step="any" required value="{{ form_values.get('vz', 0) }}"></label>
+                        </div>
+                        <div class="row">
+                            <label>Ex <input name="Ex" type="number" step="any" required value="{{ form_values.get('Ex', 0) }}"></label>
+                            <label>Ey <input name="Ey" type="number" step="any" required value="{{ form_values.get('Ey', 0) }}"></label>
+                            <label>Ez <input name="Ez" type="number" step="any" required value="{{ form_values.get('Ez', 0) }}"></label>
+                        </div>
+                        <div class="row">
+                            <label>Bx <input name="Bx" type="number" step="any" required value="{{ form_values.get('Bx', 0) }}"></label>
+                            <label>By <input name="By" type="number" step="any" required value="{{ form_values.get('By', 0) }}"></label>
+                            <label>Bz <input name="Bz" type="number" step="any" required value="{{ form_values.get('Bz', 0) }}"></label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="colision" style="display:none">
+                        <div class="row">
+                            <label>m1 <input name="m1" type="number" step="any" min="0" required value="{{ form_values.get('m1', 1) }}"></label>
+                            <label>v1 <input name="v1" type="number" step="any" required value="{{ form_values.get('v1', 1) }}"></label>
+                        </div>
+                        <div class="row">
+                            <label>m2 <input name="m2" type="number" step="any" min="0" required value="{{ form_values.get('m2', 1) }}"></label>
+                            <label>v2 <input name="v2" type="number" step="any" required value="{{ form_values.get('v2', 0) }}"></label>
+                            <label>Elastica <input name="elastic" type="checkbox" {% if form_values.get('elastic','on') == 'on' %}checked{% endif %}></label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="oscilador" style="display:none">
+                        <div class="row">
+                            <label>m <input name="m" type="number" step="any" min="0" required value="{{ form_values.get('m', 1) }}"></label>
+                            <label>k <input name="k" type="number" step="any" min="0" required value="{{ form_values.get('k', 1) }}"></label>
+                            <label>q0 <input name="q0" type="number" step="any" required value="{{ form_values.get('q0', 1) }}"></label>
+                            <label>v0 <input name="v0" type="number" step="any" required value="{{ form_values.get('v0', 0) }}"></label>
+                        </div>
+                        <div class="row">
+                            <label>tmax <input name="tmax" type="number" step="any" min="0" required value="{{ form_values.get('tmax', 6.283) }}"></label>
+                            <label>n <input name="n" type="number" step="1" min="3" required value="{{ form_values.get('n', 201) }}"></label>
+                            <label>method
+                                <select name="method">
+                                    <option value="rk4" {% if form_values.get('method','rk4')=='rk4' %}selected{% endif %}>RK4</option>
+                                    <option value="euler" {% if form_values.get('method')=='euler' %}selected{% endif %}>Euler</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" data-tool="doble_pendulo" style="display:none">
+                        <div class="row">
+                            <label>th1 <input name="th1" type="number" step="any" required value="{{ form_values.get('th1', 1) }}"></label>
+                            <label>th2 <input name="th2" type="number" step="any" required value="{{ form_values.get('th2', 1) }}"></label>
+                            <label>w1 <input name="w1" type="number" step="any" required value="{{ form_values.get('w1', 0) }}"></label>
+                            <label>w2 <input name="w2" type="number" step="any" required value="{{ form_values.get('w2', 0) }}"></label>
+                        </div>
+                        <div class="row">
+                            <label>L1 <input name="L1" type="number" step="any" min="0.000001" required value="{{ form_values.get('L1', 1) }}"></label>
+                            <label>L2 <input name="L2" type="number" step="any" min="0.000001" required value="{{ form_values.get('L2', 1) }}"></label>
+                            <label>m1 <input name="m1" type="number" step="any" min="0" required value="{{ form_values.get('m1', 1) }}"></label>
+                            <label>m2 <input name="m2" type="number" step="any" min="0" required value="{{ form_values.get('m2', 1) }}"></label>
+                        </div>
+                        <div class="row">
+                            <label>tmax <input name="tmax" type="number" step="any" min="0" required value="{{ form_values.get('tmax', 10) }}"></label>
+                            <label>n <input name="n" type="number" step="1" min="10" required value="{{ form_values.get('n', 501) }}"></label>
+                        </div>
+                    </div>
+
+                    <div class="row" style="margin-top:12px;">
+                        <button type="submit">Ejecutar</button>
+                    </div>
+                </form>
+
+                {% if result and not sistema_resultado %}
+                    <div class="result">{{ result }}</div>
+                    {% if plot_url %}
+                        <div style="margin-top:12px;text-align:center;">
+                            <img id="result-img" src="{{ plot_url }}" style="max-width:100%;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+                            <form method="post" action="/download_plot" style="margin-top:8px;">
+                                <input type="hidden" name="imgdata" id="imgdata-field" value="{{ plot_url }}">
+                                <button type="submit">Descargar imagen</button>
+                            </form>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </section>
+
+        <section id="resto" class="panel {% if active_section=='resto' %}active{% endif %}">
             <div class="grid">
                 <section class="card">
                     <h2>1) Determinante</h2>
@@ -375,21 +524,7 @@
                     </form>
                 </section>
 
-                <section class="card">
-                    <h2>6) Simulación física</h2>
-                    <form method="post">
-                        <input type="hidden" name="section" value="fisica">
-                        <div class="row">
-                            <label>v0 <input name="v0" type="number" step="any" value="20"></label>
-                            <label>angulo <input name="angulo" type="number" step="any" value="45"></label>
-                        </div>
-                        <div class="row">
-                            <label>g <input name="g" type="number" step="any" value="9.81"></label>
-                            <label>tmax <input name="tmax" type="number" step="any" value="5"></label>
-                        </div>
-                        <button type="submit">Simular</button>
-                    </form>
-                </section>
+                <!-- Física: movida a su propia pestaña -->
             </div>
         </section>
 
@@ -407,6 +542,17 @@
                 document.getElementById(button.dataset.target).classList.add('active');
             });
         });
+        // Physics tool switcher
+        const toolSelect = document.getElementById('tool-select')
+        if (toolSelect) {
+            function showTool(tool) {
+                document.querySelectorAll('.tool-group').forEach(g => {
+                    g.style.display = g.dataset.tool === tool ? 'block' : 'none'
+                })
+            }
+            toolSelect.addEventListener('change', (e) => showTool(e.target.value))
+            showTool(toolSelect.value)
+        }
     </script>
 </body>
 </html>
